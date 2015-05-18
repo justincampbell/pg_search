@@ -248,6 +248,65 @@ describe "an Active Record model which includes PgSearch" do
         end
       end
 
+      context "when searching across associations" do
+        with_model :House do
+          table do |t|
+            t.references :person
+            t.string :city
+          end
+
+          model do
+            belongs_to :person
+          end
+        end
+
+        with_model :Person do
+          table do |t|
+            t.string :name
+          end
+
+          model do
+            include PgSearch
+            has_one :house
+            pg_search_scope :named, associated_against: { house: { city: 'A' } }
+          end
+        end
+
+        it "works when the other scope is last" do
+          house_in_duluth = House.create!(city: "Duluth")
+          second_house_in_duluth = House.create!(city: "Duluth")
+          house_in_sheboygan = House.create!(city: "Sheboygan")
+
+          bob_in_duluth =
+            Person.create!(name: "Bob", house: house_in_duluth)
+          bob_in_sheboygan =
+            Person.create!(name: "Bob", house: house_in_sheboygan)
+          sally_in_duluth =
+            Person.create!(name: "Sally", house: second_house_in_duluth)
+
+          results = Person.named("Bob").where(House.table_name.to_sym => {city: "Duluth"})
+          expect(results).to include bob_in_duluth
+          expect(results).not_to include [bob_in_sheboygan, sally_in_duluth]
+        end
+
+        it "works when the other scope is first" do
+          house_in_duluth = House.create!(city: "Duluth")
+          second_house_in_duluth = House.create!(city: "Duluth")
+          house_in_sheboygan = House.create!(city: "Sheboygan")
+
+          bob_in_duluth =
+            Person.create!(name: "Bob", house: house_in_duluth)
+          bob_in_sheboygan =
+            Person.create!(name: "Bob", house: house_in_sheboygan)
+          sally_in_duluth =
+            Person.create!(name: "Sally", house: second_house_in_duluth)
+
+          results = Person.named("Bob").where(House.table_name.to_sym => {city: "Duluth"})
+          expect(results).to include bob_in_duluth
+          expect(results).not_to include [bob_in_sheboygan, sally_in_duluth]
+        end
+      end
+
       it "returns an empty array when a blank query is passed in" do
         ModelWithPgSearch.create!(:content => 'foo')
 
